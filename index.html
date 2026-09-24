@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>STOP VZLA 2.0</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{
   --bg-0:#07070b;--bg-1:#0f0f18;--bg-2:#16161f;--bg-3:#1e1e2a;
@@ -313,19 +314,13 @@ select.input{cursor:pointer}
 <div id="countdown-overlay"><div class="count-num" id="count-num">3</div></div>
 <div id="stop-overlay"><div class="stop-text">STOP</div></div>
 <div id="modal"><div class="modal-box" id="modal-box"></div></div>
-
-<!-- 🔌 DAILY SDK al FINAL para no bloquear la página -->
-<script src="https://cdn.jsdelivr.net/npm/@daily-co/daily-js@0.71.0/dist/daily.js" onerror="console.warn('Daily SDK no cargó')"></script>
   
   <script>
 const SUPABASE_URL = 'https://kwqwwhoikaymifancjmk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_fNM5P4lHckJoC9_0LG_M0g_40nGS3gc';
 
-const DAILY_DOMAIN = 'juegostop.daily.co';
-
 let supabase = null;
 let channel = null;
-let vozCall = null;
 
 try {
   if (window.supabase && window.supabase.createClient) {
@@ -334,8 +329,6 @@ try {
     st.className = 'online';
     st.innerHTML = '<span class="dot"></span> ONLINE';
     console.log('✅ Supabase conectado');
-  } else {
-    console.warn('⚠️ Supabase no cargó');
   }
 } catch(e){ console.error('❌ Supabase:', e); }
 
@@ -381,6 +374,7 @@ const CATS = [
 const LETTERS = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ'.split('');
 const COLORS_AVATAR = ['#ff2d2d','#ff6b35','#facc15','#22c55e','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#06b6d4'];
 
+/* 💾 GUARDAR/CARGAR estado */
 function saveState(){
   if(!S.me || !S.roomCode) return;
   try {
@@ -427,86 +421,154 @@ function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.r
 function toast(msg,type){ const t=document.createElement('div'); t.className='toast '+(type||''); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2400); }
 function copyCode(){ navigator.clipboard?.writeText(S.roomCode).then(()=>toast('Código copiado ✅','success')).catch(()=>toast('No se pudo copiar','error')); }
 
-/* 🎙️ VOZ - DAILY.CO */
-async function iniciarVoz(roomCode){
-  if(vozCall) return;
-  if(!window.DailyIframe){
-    console.warn('⚠️ Daily SDK no cargó todavía');
-    // Reintenta en 1.5s una vez
-    setTimeout(()=>{
-      if(window.DailyIframe && !vozCall && S.roomCode === roomCode){
-        iniciarVoz(roomCode);
-      } else if(!window.DailyIframe){
-        toast('No se pudo cargar el sistema de voz','error');
-      }
-    }, 1500);
-    return;
-  }
+/* 🎙️ VOZ — PEERJS (sin tarjeta, sin registro) */
+let peer = null;              // Mi Peer (si soy host) o mi conexión (si soy cliente)
+let peerConns = [];           // Conexiones entrantes (host)
+let localStream = null;       // Mi micrófono
+let myCallId = null;          // ID de PeerJS (usamos el nombre del jugador)
+let isHostPeer = false;
+let voiceReady = false;
+
+function peerIdFor(name){
+  // Sanitizar: PeerJS solo acepta letras, números, guiones y guion bajo
+  return 'stopvzla-' + String(name).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,15) + '-' + Math.floor(Math.random()*900+100);
+}
+
+async function iniciarVoz(nombreHost){
+  if(peer) return;
+  if(!window.Peer){ console.warn('PeerJS no cargó'); return; }
   try {
-    vozCall = window.DailyIframe.createCallObject();
-    const url = `https://${DAILY_DOMAIN}/${roomCode}`;
-    console.log('🎙️ Conectando voz a:', url);
+    myCallId = peerIdFor(S.me.name);
+    peer = new Peer(myCallId, { debug: 1 });
+    console.log('🎙️ Mi Peer ID:', myCallId);
 
-    // ✅ CLAVE: adjuntar audio remoto al DOM
-    vozCall.on('track-started', (ev) => {
-      if(!ev || !ev.participant || !ev.track) return;
-      if(ev.participant.local) return;
-      if(ev.track.kind !== 'audio') return;
-      const audioEl = document.createElement('audio');
-      audioEl.srcObject = new MediaStream([ev.track]);
-      audioEl.autoplay = true;
-      audioEl.setAttribute('data-remote-audio', ev.participant.session_id);
-      document.body.appendChild(audioEl);
-      console.log('🔊 Audio de', ev.participant.user_name, 'añadido');
-    });
-
-    vozCall.on('track-stopped', (ev) => {
-      if(!ev || !ev.participant) return;
-      const el = document.querySelector(`audio[data-remote-audio="${ev.participant.session_id}"]`);
-      if(el) el.remove();
-    });
-
-    vozCall.on('joined-meeting', async () => {
-      try { await vozCall.setLocalAudio(false); } catch(e){}
-      if(S.me) S.me.muted = true;
-      renderRoom();
-      toast('🎙️ Voz conectada — toca tu micrófono para hablar','info');
-    });
-
-    vozCall.on('active-speaker-change', (ev) => {
-      try {
-        const parts = vozCall.participants();
-        const sid = ev.activeSpeaker?.peerId;
-        S.players.forEach(pl => {
-          if(!pl.isBot && pl.id !== S.me.id) pl.speaking = false;
+    peer.on('open', (id) => {
+      console.log('🎙️ Peer conectado:', id);
+      voiceReady = true;
+      // Si soy HOST, creo el peer con mi nombre de host para que los demás se conecten a mí
+      if(S.me.isHost){
+        isHostPeer = true;
+        // El host escucha conexiones entrantes
+        peer.on('connection', (conn) => {
+          conn.on('data', (data) => {
+            // Mensajes de voz (aunque aquí no se usa, podría usarse)
+          });
+          conn.on('open', () => {
+            peerConns.push(conn);
+            console.log('🎙️ Cliente conectado:', conn.peer);
+          });
+          conn.on('close', () => {
+            peerConns = peerConns.filter(c => c !== conn);
+            console.log('🎙️ Cliente desconectado');
+          });
         });
-        if(sid && parts[sid] && !parts[sid].local){
-          const speakerName = parts[sid].user_name;
-          const pl = S.players.find(x => x.name === speakerName && x.id !== S.me.id);
-          if(pl && !pl.muted) pl.speaking = true;
-        }
-        actualizarBurbujasVoz();
-      } catch(e){}
+        // Escuchar llamadas entrantes (audio)
+        peer.on('call', (call) => {
+          call.answer(localStream);  // responder con mi audio (o sin audio si estoy muteado)
+          call.on('stream', (remoteStream) => {
+            attachRemoteAudio(remoteStream, call.peer);
+          });
+          call.on('close', () => {
+            removeRemoteAudio(call.peer);
+          });
+        });
+      }
     });
 
-    vozCall.on('participant-joined', () => actualizarBurbujasVoz());
-    vozCall.on('participant-left', () => actualizarBurbujasVoz());
-    vozCall.on('error', (e) => console.warn('Voz error:', e));
+    peer.on('error', (err) => {
+      console.warn('🎙️ Peer error:', err);
+    });
 
-    await vozCall.join({ url, userName: S.me.name, startAudioOff: true });
+    peer.on('disconnected', () => {
+      console.log('🎙️ Peer desconectado, intentando reconectar…');
+      try { peer.reconnect(); } catch(e){}
+    });
+
+    // Si NO soy host, me conecto al host por su peer ID
+    // El peer ID del host lo derivamos del nombre del host + la sala
+    if(!S.me.isHost){
+      setTimeout(() => {
+        const hostPeerId = 'stopvzla-' + String(S.hostId || 'host').replace(/[^a-z0-9]/g,'').slice(0,15) + '-000';
+        // En su lugar, usamos el peer ID que el host anunció por broadcast
+        // (ver función setHostPeerId)
+        if(window.__hostPeerId){
+          conectarVozAlHost(window.__hostPeerId);
+        }
+      }, 1500);
+    }
+
+    // Obtener micrófono con permisos
+    await pedirMicrofono();
   } catch(e){
-    console.warn('❌ Error iniciando voz:', e);
-    toast('No se pudo conectar la voz','error');
-    vozCall = null;
+    console.warn('❌ Error PeerJS:', e);
   }
 }
 
-function detenerVoz(){
-  if(vozCall){
-    try { vozCall.destroy(); } catch(e){}
-    vozCall = null;
-    console.log('🔇 Voz desconectada');
+async function pedirMicrofono(){
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }, video: false });
+    // ✅ Micrófono APAGADO por defecto
+    localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    console.log('🎙️ Micrófono listo (apagado)');
+    toast('🎙️ Voz lista — toca tu micrófono para hablar','info');
+  } catch(e){
+    console.warn('❌ No se pudo acceder al micrófono:', e);
+    toast('⚠️ Necesitas permitir el micrófono para hablar','error');
   }
+}
+
+function conectarVozAlHost(hostPeerId){
+  if(!peer || !localStream) return;
+  try {
+    // Llamar al host con mi audio
+    const call = peer.call(hostPeerId, localStream);
+    if(!call) return;
+    call.on('stream', (remoteStream) => {
+      attachRemoteAudio(remoteStream, hostPeerId);
+    });
+    call.on('close', () => {
+      removeRemoteAudio(hostPeerId);
+    });
+    console.log('🎙️ Llamando al host:', hostPeerId);
+  } catch(e){
+    console.warn('❌ Error llamando al host:', e);
+  }
+}
+
+function attachRemoteAudio(stream, peerId){
+  const existing = document.querySelector(`audio[data-peer="${peerId}"]`);
+  if(existing) return;
+  const audio = document.createElement('audio');
+  audio.srcObject = stream;
+  audio.autoplay = true;
+  audio.setAttribute('data-peer', peerId);
+  document.body.appendChild(audio);
+  console.log('🔊 Audio remoto añadido de', peerId);
+}
+
+function removeRemoteAudio(peerId){
+  const el = document.querySelector(`audio[data-peer="${peerId}"]`);
+  if(el) el.remove();
+}
+
+function detenerVoz(){
+  if(localStream){
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+  document.querySelectorAll('audio[data-peer]').forEach(a => a.remove());
+  if(peer){
+    try { peer.destroy(); } catch(e){}
+    peer = null;
+  }
+  peerConns = [];
+  voiceReady = false;
+  window.__hostPeerId = null;
+  console.log('🔇 Voz desconectada');
 }
 
 function actualizarBurbujasVoz(){
@@ -526,6 +588,14 @@ function sendMsg(msg){
 function handleIncoming(msg){
   if(!msg || !S.me) return;
 
+  // 🎙️ Recibir Peer ID del host para conectar voz
+  if(msg.type==='host-peer-id' && !S.me.isHost && msg.room===S.roomCode){
+    window.__hostPeerId = msg.peerId;
+    console.log('🎙️ Peer ID del host recibido:', msg.peerId);
+    if(localStream) conectarVozAlHost(msg.peerId);
+    return;
+  }
+
   if(msg.type==='join-request' && S.me.isHost){
     if(msg.room !== S.roomCode) return;
     const yaExiste = S.players.find(p=>p.id===msg.player.id);
@@ -541,6 +611,10 @@ function handleIncoming(msg){
       renderRoom();
     }
     broadcast();
+    // 🎙️ Anunciar mi Peer ID al nuevo cliente
+    if(peer && myCallId){
+      setTimeout(()=> sendMsg({type:'host-peer-id', room:S.roomCode, peerId: myCallId}), 500);
+    }
     return;
   }
   if(msg.type==='room-full' && msg.to===S.me.id){ toast('Sala llena (máx 15)','error'); return; }
@@ -560,9 +634,6 @@ function handleIncoming(msg){
     S.votes = msg.state.votes || {};
     S.letterChangesLeft = (msg.state.letterChangesLeft !== undefined) ? msg.state.letterChangesLeft : 2;
     S.me = S.players.find(p=>p.id===S.me.id) || S.me;
-    if(mutedAntes !== S.me.muted && vozCall && vozCall.meetingState && vozCall.meetingState() === 'joined-meeting'){
-      try { vozCall.setLocalAudio(!S.me.muted); } catch(e){}
-    }
     if(S.phase==='room'){
       if(!$('screen-room').classList.contains('active')) enterRoom(); else renderRoom();
     }
@@ -789,7 +860,7 @@ function enterRoom(){
   show('screen-room');
   renderRoom();
   startVoiceSim();
-  iniciarVoz(S.roomCode);
+  iniciarVoz();
   const btn = $('btn-back-to-room');
   if(btn) btn.style.display = S.roomCode ? 'flex' : 'none';
 }
@@ -901,19 +972,20 @@ async function toggleMute(pid){
 
   // 👤 Si me toco a mí mismo
   if(p.id === S.me.id){
-    if(!vozCall || (vozCall.meetingState && vozCall.meetingState() !== 'joined-meeting')){
-      toast('🎙️ La voz aún se está conectando…','info');
+    if(!localStream){
+      toast('🎙️ El micrófono aún no está listo. Acepta el permiso.','info');
       return;
     }
     try {
       const estabaMuteado = p.muted;
-      await vozCall.setLocalAudio(estabaMuteado);
+      // Cambiar habilitación de las pistas de audio
+      localStream.getAudioTracks().forEach(t => { t.enabled = estabaMuteado; });
       p.muted = !estabaMuteado;
       toast(p.muted ? '🔇 Micrófono apagado' : '🎙️ Micrófono encendido', p.muted?'error':'success');
       broadcast(); renderRoom();
     } catch(e){
       console.warn('Error mic:', e);
-      toast('No se pudo activar el micrófono. Acepta el permiso.','error');
+      toast('No se pudo activar el micrófono','error');
     }
     return;
   }
@@ -988,7 +1060,7 @@ async function leaveRoom(){
 
 function startVoiceSim(){
   clearInterval(S.voiceSimInterval);
-  if(vozCall) return;
+  if(localStream) return;
   S.voiceSimInterval = setInterval(()=>{
     if(S.phase!=='room' && S.phase!=='game' && S.phase!=='score') return;
     S.players.forEach(p=>{ p.speaking = !p.muted && !p.isBot && Math.random() < 0.28; });
@@ -1331,11 +1403,9 @@ function restartGame(){
   toast('🔁 De vuelta a la sala','success');
 }
 
-/* ===== MODAL ===== */
 function openModal(html){ $('modal-box').innerHTML=html; $('modal').classList.add('active'); }
 function closeModal(){ $('modal').classList.remove('active'); }
 
-/* ===== INIT ===== */
 window.addEventListener('DOMContentLoaded', async ()=>{
   setMode(null);
   const nameInput = $('inp-name');
