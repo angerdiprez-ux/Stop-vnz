@@ -30,7 +30,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(255,45,45,.55)}50%{box-shadow:0 0 0 18px rgba(255,45,45,0)}}
 @keyframes shine{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes micPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.30)}}
 @keyframes countZoom{0%{transform:scale(.3);opacity:0}40%{transform:scale(1.25);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes stopPulse{
   0%{transform:scale(.2) rotate(-8deg);opacity:0}
@@ -38,6 +37,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
   30%{transform:scale(1) rotate(0deg);opacity:1}
   70%{transform:scale(1);opacity:1}
   100%{transform:scale(1.15);opacity:0}
+}
+@keyframes voicePulse{
+  0%,100%{box-shadow:0 4px 14px rgba(34,197,94,.6),0 0 0 0 rgba(34,197,94,.7)}
+  50%{box-shadow:0 4px 14px rgba(34,197,94,.6),0 0 0 8px rgba(34,197,94,0)}
 }
 
 #screen-home{justify-content:flex-start;align-items:center;padding:28px 20px 40px}
@@ -79,7 +82,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 #net-status.online{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#7ee7a1}
 #net-status.offline{background:rgba(250,204,21,.15);border:1px solid rgba(250,204,21,.4);color:#fde68a}
 #net-status .dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulseGlow 1.4s infinite}
-#debug-msg{position:fixed;top:52px;right:14px;background:rgba(0,0,0,.6);color:#9a9aa8;font-size:10px;padding:6px 10px;border-radius:8px;z-index:99;max-width:260px;word-break:break-word;line-height:1.35;display:none}
 
 #screen-lobby{padding:24px 20px;justify-content:center;align-items:center}
 .lobby-wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:18px;animation:slideUp .5s both}
@@ -120,7 +122,6 @@ select.input{cursor:pointer}
 .player-badge{padding:4px 9px;border-radius:100px;background:rgba(255,45,45,.15);border:1px solid rgba(255,45,45,.4);font-size:10px;font-weight:900;color:#ff8f8f;letter-spacing:.5px}
 .player-badge.vice{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.5);color:#93c5fd}
 .player-score{font-size:12px;font-weight:900;color:var(--yellow);padding:4px 9px;border-radius:8px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.35);flex-shrink:0;min-width:48px;text-align:center}
-
 .kick-btn{width:34px;height:34px;border-radius:10px;background:rgba(255,45,45,.12);border:1.5px solid rgba(255,45,45,.4);color:#ff8f8f;font-size:15px;cursor:pointer;display:grid;place-items:center;transition:.18s;flex-shrink:0}
 .kick-btn:hover{background:rgba(255,45,45,.28);border-color:var(--red);transform:scale(1.06)}
 .kick-btn:active{transform:scale(.92)}
@@ -195,28 +196,37 @@ select.input{cursor:pointer}
 .toast.success{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.15);color:#7ee7a1}
 .toast.info{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.15);color:#93c5fd}
 
-.voice-fab{position:fixed;top:70px;right:14px;z-index:90;display:flex;flex-direction:column;align-items:center;gap:4px;background:linear-gradient(135deg,#22c55e,#16a34a);border:2px solid rgba(255,255,255,.25);color:#fff;padding:12px 14px;border-radius:16px;cursor:pointer;font-family:inherit;font-weight:800;font-size:11px;box-shadow:0 8px 24px rgba(34,197,94,.5),0 0 0 0 rgba(34,197,94,.7);animation:voiceFabPulse 2s infinite;transition:transform .15s}
-.voice-fab:active{transform:scale(.94)}
-.voice-fab:hover{filter:brightness(1.1)}
-.voice-fab-icon{font-size:22px;display:block;line-height:1}
-.voice-fab-label{font-size:10px;letter-spacing:.3px;white-space:nowrap}
-.voice-fab.active{background:linear-gradient(135deg,#ff2d2d,#dc2626);box-shadow:0 8px 24px rgba(255,45,45,.5),0 0 0 0 rgba(255,45,45,.7);animation:voiceFabPulseRed 2s infinite}
-@keyframes voiceFabPulse{
-  0%,100%{box-shadow:0 8px 24px rgba(34,197,94,.5),0 0 0 0 rgba(34,197,94,.7)}
-  50%{box-shadow:0 8px 24px rgba(34,197,94,.5),0 0 0 14px rgba(34,197,94,0)}
-}
-@keyframes voiceFabPulseRed{
-  0%,100%{box-shadow:0 8px 24px rgba(255,45,45,.5),0 0 0 0 rgba(255,45,45,.7)}
-  50%{box-shadow:0 8px 24px rgba(255,45,45,.5),0 0 0 14px rgba(255,45,45,0)}
-}
+/* 🎙️ BOTÓN DE VOZ - FLOTANTE, ARRASTRABLE, MINIMIZABLE */
+#voice-widget{position:fixed;bottom:20px;right:20px;z-index:80;display:none;flex-direction:column;align-items:center;gap:6px;transition:opacity .3s}
+#voice-widget.visible{display:flex}
+#voice-widget.semi-transparent{opacity:.45}
+#voice-widget.semi-transparent:hover, #voice-widget.semi-transparent:active{opacity:1}
 
-#jitsi-overlay{position:fixed;inset:0;background:#000;z-index:500;display:none;flex-direction:column}
-#jitsi-overlay.active{display:flex}
-.jitsi-header{padding:10px 14px;background:#16161f;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a38;flex-shrink:0}
-.jitsi-header span{font-size:13px;font-weight:800;color:#f5f5f7}
-.jitsi-close{background:rgba(255,45,45,.15);border:1px solid rgba(255,45,45,.4);color:#ff8f8f;padding:8px 14px;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
-.jitsi-close:hover{background:rgba(255,45,45,.28)}
-#jitsi-container{flex:1;background:#000}
+.voice-btn-big{display:flex;flex-direction:column;align-items:center;gap:3px;background:linear-gradient(135deg,#22c55e,#16a34a);border:2px solid rgba(255,255,255,.3);color:#fff;padding:8px 10px;border-radius:14px;cursor:pointer;font-family:inherit;font-weight:800;font-size:10px;animation:voicePulse 2.2s infinite;touch-action:none;user-select:none;min-width:58px}
+.voice-btn-big:active{transform:scale(.94)}
+.voice-btn-big .ico{font-size:18px;line-height:1}
+.voice-btn-big .lbl{font-size:9px;letter-spacing:.2px;white-space:nowrap}
+.voice-btn-big.active{background:linear-gradient(135deg,#ff2d2d,#dc2626);animation:none;box-shadow:0 4px 14px rgba(255,45,45,.6)}
+
+.voice-btn-mini{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#16a34a);border:2px solid rgba(255,255,255,.3);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center;font-family:inherit;animation:voicePulse 2.2s infinite;touch-action:none;user-select:none;padding:0;line-height:1}
+.voice-btn-mini:active{transform:scale(.9)}
+.voice-btn-mini.active{background:linear-gradient(135deg,#ff2d2d,#dc2626);animation:none}
+
+.voice-mini-close{width:18px;height:18px;border-radius:50%;background:rgba(255,45,45,.9);border:1.5px solid rgba(255,255,255,.4);color:#fff;font-size:10px;cursor:pointer;display:grid;place-items:center;font-family:inherit;padding:0;line-height:1;font-weight:900;margin-top:-6px}
+.voice-mini-close:active{transform:scale(.9)}
+
+/* JITSI FLOTANTE */
+#jitsi-widget{position:fixed;bottom:80px;right:20px;width:min(340px,85vw);height:min(420px,60vh);background:#000;border:2px solid #2a2a38;border-radius:16px;overflow:hidden;z-index:400;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.8);touch-action:none}
+#jitsi-widget.visible{display:flex}
+.jitsi-widget-header{background:#16161f;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a38;flex-shrink:0;cursor:grab;user-select:none}
+.jitsi-widget-header:active{cursor:grabbing}
+.jitsi-widget-header span{font-size:11px;font-weight:800;color:#f5f5f7;display:flex;align-items:center;gap:6px}
+.jitsi-widget-btns{display:flex;gap:6px}
+.jitsi-widget-btns button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;width:26px;height:26px;border-radius:8px;cursor:pointer;font-size:12px;display:grid;place-items:center;font-family:inherit;padding:0;line-height:1;font-weight:900}
+.jitsi-widget-btns button:hover{background:rgba(255,255,255,.18)}
+.jitsi-widget-btns button.close{background:rgba(255,45,45,.2);border-color:rgba(255,45,45,.5);color:#ff8f8f}
+.jitsi-widget-btns button.close:hover{background:rgba(255,45,45,.4)}
+#jitsi-container{flex:1;background:#000;overflow:hidden}
 </style>
 </head>
 <body>
@@ -325,22 +335,34 @@ select.input{cursor:pointer}
   </div>
 </div>
 
-<button class="voice-fab" id="btn-open-voice" onclick="toggleVoiceChat()" style="display:none" title="Chat de voz grupal">
-  <span class="voice-fab-icon">🎙️</span>
-  <span class="voice-fab-label">Chat de voz</span>
-</button>
+<!-- 🎙️ WIDGET DE VOZ FLOTANTE -->
+<div id="voice-widget">
+  <!-- Vista pequeña (burbuja) -->
+  <button class="voice-btn-mini" id="voice-mini" onclick="abrirVozDesdeMini()" style="display:none" title="Chat de voz">🎙️</button>
+  <button class="voice-mini-close" id="voice-mini-close" onclick="cerrarVozDesdeMini()" style="display:none" title="Cerrar voz">✕</button>
+  <!-- Vista grande -->
+  <div class="voice-btn-big" id="voice-big" onclick="abrirVozDesdeBig()">
+    <span class="ico">🎙️</span>
+    <span class="lbl">Voz</span>
+  </div>
+  <button class="voice-mini-close" id="voice-big-close" onclick="minimizarVoz()" title="Minimizar" style="margin-top:-4px">✕</button>
+</div>
+
+<!-- 📞 JITSI FLOTANTE -->
+<div id="jitsi-widget">
+  <div class="jitsi-widget-header" id="jitsi-drag-handle">
+    <span id="jitsi-info">🎙️ 1 en llamada</span>
+    <div class="jitsi-widget-btns">
+      <button onclick="minimizarJitsi()" title="Minimizar">—</button>
+      <button class="close" onclick="cerrarJitsi()" title="Cerrar">✕</button>
+    </div>
+  </div>
+  <div id="jitsi-container"></div>
+</div>
 
 <div id="countdown-overlay"><div class="count-num" id="count-num">3</div></div>
 <div id="stop-overlay"><div class="stop-text">STOP</div></div>
 <div id="modal"><div class="modal-box" id="modal-box"></div></div>
-
-<div id="jitsi-overlay">
-  <div class="jitsi-header">
-    <span>🎙️ Chat de voz grupal</span>
-    <button class="jitsi-close" onclick="toggleVoiceChat()">✕ Cerrar</button>
-  </div>
-  <div id="jitsi-container"></div>
-</div>
   
   <script>
 const SUPABASE_URL = 'https://kwqwwhoikaymifancjmk.supabase.co';
@@ -436,7 +458,11 @@ const S = {
   phase:'home', round:1, maxRounds:5, letter:null, usedLetters:[],
   answers:{}, votes:{}, scores:{},
   isRealtime:false, _countdownRunning:false, _stopTimeout:null,
-  letterChangesLeft: 2
+  letterChangesLeft: 2,
+  vozMinimizada: false,
+  vozAbierta: false,
+  voicePos: {x:null, y:null},
+  jitsiPos: {x:null, y:null}
 };
 
 function uid(){ return 'p'+Math.random().toString(36).slice(2,9) }
@@ -640,40 +666,102 @@ function broadcast(extra){
   saveState();
 }
 
-/* 🎙️ JITSI */
+/* 🎙️ SISTEMA DE VOZ — JITSI EN WIDGET FLOTANTE */
 let jitsiApi = null;
-let jitsiActivo = false;
+let jitsiAbierto = false;
+let jitsiMinimizado = false;
 
 function nombreSalaJitsi(){
   if(!S.roomCode) return '';
   return 'juegostopvzla-' + S.roomCode.toLowerCase().replace(/[^a-z0-9]/g,'');
 }
 
-function mostrarBotonVoz(){
-  const btn = $('btn-open-voice');
-  if(!btn) return;
+/* 🎯 Mostrar/ocultar widget según pantalla */
+function mostrarWidgetVoz(){
+  const widget = $('voice-widget');
+  if(!widget) return;
   const enSala = $('screen-room').classList.contains('active');
   const enJuego = $('screen-game').classList.contains('active');
   const enScore = $('screen-score').classList.contains('active');
-  const mostrar = S.roomCode && (enSala || enJuego || enScore);
-  btn.style.display = mostrar ? 'flex' : 'none';
+  const debeMostrar = S.roomCode && (enSala || enJuego || enScore);
+
+  if(debeMostrar){
+    widget.classList.add('visible');
+    // 👻 Semi-transparente en juego y calificación (no en sala)
+    if(enJuego || enScore){
+      widget.classList.add('semi-transparent');
+    } else {
+      widget.classList.remove('semi-transparent');
+    }
+  } else {
+    widget.classList.remove('visible');
+  }
 }
 
-function toggleVoiceChat(){
-  const ov = $('jitsi-overlay');
-  if(!ov) return;
-  if(jitsiActivo){ cerrarJitsi(); return; }
-
-  ov.classList.add('active');
-  jitsiActivo = true;
-  const btn = $('btn-open-voice');
-  if(btn){
-    btn.classList.add('active');
-    const lbl = btn.querySelector('.voice-fab-label');
-    if(lbl) lbl.textContent = 'Cerrar';
-    const ico = btn.querySelector('.voice-fab-icon');
-    if(ico) ico.textContent = '❌';
+function actualizarBotonesVoz(){
+  const big = $('voice-big');
+  const bigClose = $('voice-big-close');
+  const mini = $('voice-mini');
+  const miniClose = $('voice-mini-close');
+  if(!big || !mini) return;
+  if(S.vozMinimizada){
+    big.style.display = 'none';
+    bigClose.style.display = 'none';
+    mini.style.display = 'grid';
+    miniClose.style.display = 'grid';
+  } else {
+    big.style.display = 'flex';
+    bigClose.style.display = 'grid';
+    mini.style.display = 'none';
+    miniClose.style.display = 'none';
   }
+  // Color según si estoy en llamada
+  const enLlamada = jitsiAbierto;
+  big.classList.toggle('active', enLlamada);
+  mini.classList.toggle('active', enLlamada);
+  big.querySelector('.lbl').textContent = enLlamada ? 'En voz' : 'Voz';
+  big.querySelector('.ico').textContent = enLlamada ? '🔴' : '🎙️';
+  mini.textContent = enLlamada ? '🔴' : '🎙️';
+}
+
+function minimizarVoz(){
+  S.vozMinimizada = true;
+  actualizarBotonesVoz();
+}
+
+function cerrarVozDesdeMini(){
+  S.vozMinimizada = false;
+  actualizarBotonesVoz();
+}
+
+function abrirVozDesdeMini(){
+  // Si la llamada está abierta, mostrarla
+  if(jitsiAbierto && jitsiMinimizado){
+    mostrarJitsi();
+    return;
+  }
+  // Si no, abrir la llamada
+  abrirJitsi();
+}
+
+function abrirVozDesdeBig(){
+  if(jitsiAbierto && jitsiMinimizado){
+    mostrarJitsi();
+    return;
+  }
+  abrirJitsi();
+}
+
+/* 🎬 JITSI */
+function abrirJitsi(){
+  if(jitsiAbierto && !jitsiMinimizado) return;
+  jitsiAbierto = true;
+  jitsiMinimizado = false;
+
+  const widget = $('jitsi-widget');
+  if(!widget) return;
+  widget.classList.add('visible');
+  actualizarBotonesVoz();
 
   const roomName = nombreSalaJitsi();
   console.log('🎙️ Abriendo Jitsi:', roomName);
@@ -708,16 +796,23 @@ function initJitsi(roomName){
         startWithVideoMuted: true,
         prejoinPageEnabled: false,
         disableDeepLinking: true,
-        toolbarButtons: ['microphone','hangup','settings','raisehand','chat','tileview']
+        disableThirdPartyRequests: true,
+        toolbarButtons: ['microphone','hangup','raisehand','settings']
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK: false,
         SHOW_WATERMARK_FOR_GUESTS: false,
-        TOOLBAR_ALWAYS_VISIBLE: true
+        TOOLBAR_ALWAYS_VISIBLE: true,
+        MOBILE_APP_PROMO: false
       }
     });
     console.log('✅ Jitsi listo');
+    toast('🎙️ Chat de voz abierto','success');
     jitsiApi.addEventListener('readyToClose', () => cerrarJitsi());
+    // Actualizar contador de participantes
+    jitsiApi.addEventListener('participantJoined', () => actualizarInfoJitsi());
+    jitsiApi.addEventListener('participantLeft', () => actualizarInfoJitsi());
+    setTimeout(actualizarInfoJitsi, 2000);
   } catch(e){
     console.error('❌ Error Jitsi:', e);
     toast('No se pudo abrir el chat de voz','error');
@@ -725,21 +820,81 @@ function initJitsi(roomName){
   }
 }
 
+function actualizarInfoJitsi(){
+  try {
+    if(!jitsiApi) return;
+    const count = jitsiApi.getNumberOfParticipants ? jitsiApi.getNumberOfParticipants() : 0;
+    const info = $('jitsi-info');
+    if(info) info.textContent = `🎙️ ${count || 1} en llamada`;
+  } catch(e){}
+}
+
+function mostrarJitsi(){
+  const widget = $('jitsi-widget');
+  if(widget) widget.classList.add('visible');
+  jitsiMinimizado = false;
+  actualizarBotonesVoz();
+}
+
+function minimizarJitsi(){
+  const widget = $('jitsi-widget');
+  if(widget) widget.classList.remove('visible');
+  jitsiMinimizado = true;
+  S.vozMinimizada = true;
+  actualizarBotonesVoz();
+  toast('🎙️ Voz minimizada — sigue activa','info');
+}
+
 function cerrarJitsi(){
-  const ov = $('jitsi-overlay');
-  if(ov) ov.classList.remove('active');
+  const widget = $('jitsi-widget');
+  if(widget) widget.classList.remove('visible');
   if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
-  jitsiActivo = false;
-  const btn = $('btn-open-voice');
-  if(btn){
-    btn.classList.remove('active');
-    const lbl = btn.querySelector('.voice-fab-label');
-    if(lbl) lbl.textContent = 'Chat de voz';
-    const ico = btn.querySelector('.voice-fab-icon');
-    if(ico) ico.textContent = '🎙️';
-  }
+  jitsiAbierto = false;
+  jitsiMinimizado = false;
   const container = $('jitsi-container');
   if(container) container.innerHTML = '';
+  actualizarBotonesVoz();
+  mostrarWidgetVoz();
+}
+
+/* 🎯 Arrastrar widgets */
+function activarArrastre(el, handle, posKey){
+  if(!el || !handle) return;
+  let offsetX = 0, offsetY = 0, dragging = false;
+
+  const onStart = (e) => {
+    const touch = e.touches ? e.touches[0] : e;
+    const rect = el.getBoundingClientRect();
+    offsetX = touch.clientX - rect.left;
+    offsetY = touch.clientY - rect.top;
+    dragging = true;
+    el.style.transition = 'none';
+  };
+  const onMove = (e) => {
+    if(!dragging) return;
+    e.preventDefault();
+    const touch = e.touches ? e.touches[0] : e;
+    const x = touch.clientX - offsetX;
+    const y = touch.clientY - offsetY;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.right = 'auto';
+    el.style.bottom = 'auto';
+  };
+  const onEnd = () => {
+    if(!dragging) return;
+    dragging = false;
+    el.style.transition = '';
+    const rect = el.getBoundingClientRect();
+    S[posKey] = { x: rect.left, y: rect.top };
+  };
+
+  handle.addEventListener('mousedown', onStart);
+  handle.addEventListener('touchstart', onStart, { passive: true });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
 }
 </script>
   
@@ -748,8 +903,8 @@ function resetAdminMode(){
   if(S.me){ S.me.isSuperAdmin = false; S.me.isVice = false; }
 }
 
-function goHome(){ resetAdminMode(); cerrarJitsi(); S.phase='home'; show('screen-home'); }
-function goLobby(){ resetAdminMode(); cerrarJitsi(); S.phase='lobby'; show('screen-lobby'); }
+function goHome(){ resetAdminMode(); cerrarJitsi(); S.phase='home'; show('screen-home'); mostrarWidgetVoz(); }
+function goLobby(){ resetAdminMode(); cerrarJitsi(); S.phase='lobby'; show('screen-lobby'); mostrarWidgetVoz(); }
 
 function setMode(m){
   S.mode = m;
@@ -816,7 +971,9 @@ function enterRoom(){
   renderRoom();
   const btn = $('btn-back-to-room');
   if(btn) btn.style.display = S.roomCode ? 'flex' : 'none';
-  mostrarBotonVoz();
+  S.vozMinimizada = false;
+  actualizarBotonesVoz();
+  mostrarWidgetVoz();
 }
 
 function rejoinRoom(){
@@ -916,7 +1073,7 @@ function renderRoom(){
   const btnReset = $('btn-reset-scores');
   if(btnReset) btnReset.style.display = S.me?.isHost ? 'flex' : 'none';
 
-  mostrarBotonVoz();
+  mostrarWidgetVoz();
 }
 
 function kickPlayer(pid){
@@ -1066,7 +1223,7 @@ function enterGame(){
   $('letter-badge').style.animation='none'; void $('letter-badge').offsetWidth; $('letter-badge').style.animation='pop .5s';
   renderCategories();
   updateLetterBadgeState();
-  mostrarBotonVoz();
+  mostrarWidgetVoz();
   saveState();
 }
 
@@ -1183,7 +1340,7 @@ function finishRound(){
   }
 }
 
-function enterScore(){ show('screen-score'); renderScore(); mostrarBotonVoz(); saveState(); }
+function enterScore(){ show('screen-score'); renderScore(); mostrarWidgetVoz(); saveState(); }
 
 function renderScore(){
   const cont = $('score-players'); cont.innerHTML='';
@@ -1323,6 +1480,11 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     codeInput.addEventListener('keydown', e=>{ if(e.key==='Enter') submitLobby(); });
     codeInput.addEventListener('input', e=>{ e.target.value = e.target.value.toUpperCase(); });
   }
+
+  // 🎙️ Configurar arrastre de widgets
+  activarArrastre($('voice-widget'), $('voice-big'), 'voicePos');
+  activarArrastre($('jitsi-widget'), $('jitsi-drag-handle'), 'jitsiPos');
+  actualizarBotonesVoz();
 
   if(loadState()){
     console.log('🔄 Restaurando partida:', S.roomCode);
