@@ -620,10 +620,27 @@ function handleIncoming(msg){
   }
 
   if(msg.type==='back-to-room' && msg.from !== S.me.id && msg.room===S.roomCode){
-    closeModal();
-    S.phase='room';
-    enterRoom();
+  closeModal();
+
+  // 🏆 Si el creador sumó los puntos automáticamente al salir, los clientes también los suman
+  if(msg.sumarPuntos && S.phase === 'score'){
+    S.players.forEach(p=>{
+      let pts = 0;
+      CATS.forEach(c=>{
+        const v = S.votes[p.id]?.[c.id];
+        if(v==='valid') pts += 100;
+        else if(v==='repeat') pts += 50;
+      });
+      S.scores[p.id] = (S.scores[p.id] || 0) + pts;
+    });
   }
+
+   S.phase='room';
+   S.answers = {};
+   S.votes = {};
+   enterRoom();
+   saveState();
+ }  
 }
 
 if (CH) CH.onmessage = (e)=> handleIncoming(e.data);
@@ -995,6 +1012,8 @@ function rejoinRoom(){
 function backToRoom(){
   if(!S.roomCode || !S.me){ toast('No estás en ninguna sala','error'); return; }
 
+  // 🏆 Si soy el creador Y estamos en fase de calificación, sumar los puntos de la ronda
+  // (a menos que ya se hayan sumado antes con "Sumar Puntos")
   if(S.me.isHost && S.phase === 'score'){
     S.players.forEach(p=>{
       let pts = 0;
@@ -1008,7 +1027,9 @@ function backToRoom(){
     toast('🏆 Puntos guardados automáticamente','success');
   }
 
-  sendMsg({type:'back-to-room', room:S.roomCode, from:S.me.id, name:S.me.name});
+  // Avisar a todos que se vuelve a la sala (y que sumen sus puntos locales)
+  sendMsg({type:'back-to-room', room:S.roomCode, from:S.me.id, name:S.me.name, sumarPuntos: true});
+
   S.phase = 'room';
   S.answers = {};
   S.votes = {};
