@@ -75,9 +75,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opac
 .btn-stop-salir{background:linear-gradient(135deg,#ff8c2d,#ff6b35);box-shadow:0 8px 28px rgba(255,107,53,.5);color:#fff;font-weight:900;letter-spacing:.5px;position:relative;overflow:hidden}
 .btn-stop-salir::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);animation:shine 3.4s infinite}
 .btn-stop-salir:hover{filter:brightness(1.1);box-shadow:0 10px 34px rgba(255,107,53,.7)}
-</style>
   
-  <style>
+  </style>
+  
+<style>
 #net-status{position:fixed;top:14px;right:14px;padding:6px 12px;border-radius:100px;font-size:11px;font-weight:800;letter-spacing:.5px;z-index:99;display:flex;align-items:center;gap:6px;transition:.3s}
 #net-status.online{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#7ee7a1}
 #net-status.offline{background:rgba(250,204,21,.15);border:1px solid rgba(250,204,21,.4);color:#fde68a}
@@ -218,6 +219,18 @@ select.input{cursor:pointer}
 /* JITSI FLOTANTE */
 #jitsi-widget{position:fixed;bottom:80px;right:20px;width:min(340px,85vw);height:min(420px,60vh);background:#000;border:2px solid #2a2a38;border-radius:16px;overflow:hidden;z-index:400;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.8);touch-action:none}
 #jitsi-widget.visible{display:flex}
+/* Clase para cuando se minimiza: No usar display:none para que no se corte la llamada */
+#jitsi-widget.minimized {
+  display: flex !important;
+  width: 1px !important;
+  height: 1px !important;
+  bottom: 0 !important;
+  right: 0 !important;
+  opacity: 0.01 !important;
+  pointer-events: none !important;
+  z-index: -100 !important;
+  border: none !important;
+}
 .jitsi-widget-header{background:#16161f;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a38;flex-shrink:0;cursor:grab;user-select:none}
 .jitsi-widget-header:active{cursor:grabbing}
 .jitsi-widget-header span{font-size:11px;font-weight:800;color:#f5f5f7;display:flex;align-items:center;gap:6px}
@@ -229,6 +242,7 @@ select.input{cursor:pointer}
 #jitsi-container{flex:1;background:#000;overflow:hidden}
 </style>
 </head>
+
 <body>
   
   <div id="net-status" class="offline"><span class="dot"></span> LOCAL</div>
@@ -240,6 +254,7 @@ select.input{cursor:pointer}
     <h1 class="home-title">STOP <span>VZLA</span></h1>
     <p class="home-sub">El juego tradicional de Stop, ahora online. Crea una sala, invita a tus panas y demuestra quién escribe más rápido.</p>
     <button class="btn btn-primary" onclick="goLobby()"><span>🎮</span> JUGAR AHORA</button>
+    <button class="btn btn-ghost btn-sm" onclick="abrirConfigDB()" style="margin-top:6px; max-width:340px;">⚙️ Configurar Base de Datos (Supabase)</button>
     <div class="how-list">
       <div class="how-title">📖 CÓMO SE JUEGA</div>
       <div class="how-item"><div class="how-num">1</div><div>Crea una sala o <b>únete</b> con el código que te pasen.</div></div>
@@ -337,10 +352,8 @@ select.input{cursor:pointer}
 
 <!-- 🎙️ WIDGET DE VOZ FLOTANTE -->
 <div id="voice-widget">
-  <!-- Vista pequeña (burbuja) -->
   <button class="voice-btn-mini" id="voice-mini" onclick="abrirVozDesdeMini()" style="display:none" title="Chat de voz">🎙️</button>
   <button class="voice-mini-close" id="voice-mini-close" onclick="cerrarVozDesdeMini()" style="display:none" title="Cerrar voz">✕</button>
-  <!-- Vista grande -->
   <div class="voice-btn-big" id="voice-big" onclick="abrirVozDesdeBig()">
     <span class="ico">🎙️</span>
     <span class="lbl">Voz</span>
@@ -365,8 +378,12 @@ select.input{cursor:pointer}
 <div id="modal"><div class="modal-box" id="modal-box"></div></div>
   
   <script>
-const SUPABASE_URL = 'https://kwqwwhoikaymifancjmk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_fNM5P4lHckJoC9_0LG_M0g_40nGS3gc';
+// ⚙️ APARTADO PARA CONFIGURAR SUPABASE FÁCILMENTE
+const DEFAULT_URL = 'https://kwqwwhoikaymifancjmk.supabase.co';
+const DEFAULT_KEY = 'sb_publishable_fNM5P4lHckJoC9_0LG_M0g_40nGS3gc';
+
+const SUPABASE_URL = localStorage.getItem('supabase_url') || DEFAULT_URL;
+const SUPABASE_ANON_KEY = localStorage.getItem('supabase_key') || DEFAULT_KEY;
 
 let supabase = null;
 let channel = null;
@@ -377,9 +394,34 @@ try {
     const st = document.getElementById('net-status');
     st.className = 'online';
     st.innerHTML = '<span class="dot"></span> ONLINE';
-    console.log('✅ Supabase conectado');
+    console.log('✅ Supabase conectado a:', SUPABASE_URL);
   }
 } catch(e){ console.error('❌ Supabase:', e); }
+
+function abrirConfigDB() {
+  const url = localStorage.getItem('supabase_url') || DEFAULT_URL;
+  const key = localStorage.getItem('supabase_key') || DEFAULT_KEY;
+  openModal(`
+    <h3>⚙️ Configuración de Red</h3>
+    <p>Ingresa las credenciales de tu base de datos Supabase para conectar el multijugador.</p>
+    <div class="field" style="margin-bottom:10px; text-align:left;"><label>Supabase URL</label><input class="input" id="cfg-url" value="${url}" placeholder="https://..."></div>
+    <div class="field" style="margin-bottom:15px; text-align:left;"><label>Supabase Anon Key</label><input class="input" id="cfg-key" value="${key}" placeholder="eyJ..."></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="guardarConfigDB()">Guardar y recargar</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    </div>
+  `);
+}
+
+function guardarConfigDB() {
+  const url = $('cfg-url').value.trim();
+  const key = $('cfg-key').value.trim();
+  if(!url || !key) { toast('Llena ambos campos','error'); return; }
+  localStorage.setItem('supabase_url', url);
+  localStorage.setItem('supabase_key', key);
+  toast('✅ Guardado. Recargando...','success');
+  setTimeout(()=> location.reload(), 1000);
+}
 
 const CH = ('BroadcastChannel' in window) ? new BroadcastChannel('stop_vzla_2') : null;
 
@@ -476,8 +518,8 @@ function sendMsg(msg){
   if (channel) channel.send({ type:'broadcast', event:'msg', payload:msg });
   if (CH) CH.postMessage(msg);
 }
-
-function handleIncoming(msg){
+  
+  function handleIncoming(msg){
   if(!msg || !S.me) return;
 
   if(msg.type==='join-request' && S.me.isHost){
@@ -621,8 +663,6 @@ function handleIncoming(msg){
 
   if(msg.type==='back-to-room' && msg.from !== S.me.id && msg.room===S.roomCode){
   closeModal();
-
-  // 🏆 Si el creador sumó los puntos automáticamente al salir, los clientes también los suman
   if(msg.sumarPuntos && S.phase === 'score'){
     S.players.forEach(p=>{
       let pts = 0;
@@ -634,7 +674,6 @@ function handleIncoming(msg){
       S.scores[p.id] = (S.scores[p.id] || 0) + pts;
     });
   }
-
    S.phase='room';
    S.answers = {};
    S.votes = {};
@@ -661,6 +700,8 @@ async function subscribeRoom(code){
         S.players = S.players.filter(p => idsOnline.has(p.id) || p.id === S.me.id || p.isBot);
         removed.forEach(r => toast(`❌ ${r.name} se desconectó`,'error'));
         broadcast(); renderRoom();
+      } else {
+        broadcast();
       }
     })
     .subscribe(async (status) => {
@@ -668,7 +709,11 @@ async function subscribeRoom(code){
         S.isRealtime = true;
         await channel.track({ id: S.me.id, name: S.me.name, color: S.me.color, isHost: S.me.isHost });
         if(!S.me.isHost){
-          setTimeout(()=> sendMsg({ type:'join-request', player:S.me, room:S.roomCode }), 500);
+          const joinInterval = setInterval(() => {
+            if(S.phase !== 'room' && S.phase !== 'lobby') { clearInterval(joinInterval); return; }
+            if(S.players.find(p => p.id === S.me.id)) { clearInterval(joinInterval); return; }
+            sendMsg({ type:'join-request', player:S.me, room:S.roomCode });
+          }, 1500);
         }
       }
     });
@@ -693,7 +738,6 @@ function nombreSalaJitsi(){
   return 'juegostopvzla-' + S.roomCode.toLowerCase().replace(/[^a-z0-9]/g,'');
 }
 
-/* 🎯 Mostrar/ocultar widget según pantalla */
 function mostrarWidgetVoz(){
   const widget = $('voice-widget');
   if(!widget) return;
@@ -704,7 +748,6 @@ function mostrarWidgetVoz(){
 
   if(debeMostrar){
     widget.classList.add('visible');
-    // 👻 Semi-transparente en juego y calificación (no en sala)
     if(enJuego || enScore){
       widget.classList.add('semi-transparent');
     } else {
@@ -732,7 +775,6 @@ function actualizarBotonesVoz(){
     mini.style.display = 'none';
     miniClose.style.display = 'none';
   }
-  // Color según si estoy en llamada
   const enLlamada = jitsiAbierto;
   big.classList.toggle('active', enLlamada);
   mini.classList.toggle('active', enLlamada);
@@ -752,12 +794,10 @@ function cerrarVozDesdeMini(){
 }
 
 function abrirVozDesdeMini(){
-  // Si la llamada está abierta, mostrarla
   if(jitsiAbierto && jitsiMinimizado){
     mostrarJitsi();
     return;
   }
-  // Si no, abrir la llamada
   abrirJitsi();
 }
 
@@ -778,6 +818,7 @@ function abrirJitsi(){
   const widget = $('jitsi-widget');
   if(!widget) return;
   widget.classList.add('visible');
+  widget.classList.remove('minimized');
   actualizarBotonesVoz();
 
   const roomName = nombreSalaJitsi();
@@ -826,7 +867,6 @@ function initJitsi(roomName){
     console.log('✅ Jitsi listo');
     toast('🎙️ Chat de voz abierto','success');
     jitsiApi.addEventListener('readyToClose', () => cerrarJitsi());
-    // Actualizar contador de participantes
     jitsiApi.addEventListener('participantJoined', () => actualizarInfoJitsi());
     jitsiApi.addEventListener('participantLeft', () => actualizarInfoJitsi());
     setTimeout(actualizarInfoJitsi, 2000);
@@ -848,14 +888,17 @@ function actualizarInfoJitsi(){
 
 function mostrarJitsi(){
   const widget = $('jitsi-widget');
-  if(widget) widget.classList.add('visible');
+  if(widget) {
+    widget.classList.remove('minimized');
+    widget.classList.add('visible');
+  }
   jitsiMinimizado = false;
   actualizarBotonesVoz();
 }
 
 function minimizarJitsi(){
   const widget = $('jitsi-widget');
-  if(widget) widget.classList.remove('visible');
+  if(widget) widget.classList.add('minimized');
   jitsiMinimizado = true;
   S.vozMinimizada = true;
   actualizarBotonesVoz();
@@ -864,7 +907,10 @@ function minimizarJitsi(){
 
 function cerrarJitsi(){
   const widget = $('jitsi-widget');
-  if(widget) widget.classList.remove('visible');
+  if(widget) { 
+    widget.classList.remove('visible'); 
+    widget.classList.remove('minimized'); 
+  }
   if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
   jitsiAbierto = false;
   jitsiMinimizado = false;
@@ -874,7 +920,6 @@ function cerrarJitsi(){
   mostrarWidgetVoz();
 }
 
-/* 🎯 Arrastrar widgets */
 function activarArrastre(el, handle, posKey){
   if(!el || !handle) return;
   let offsetX = 0, offsetY = 0, dragging = false;
@@ -978,7 +1023,7 @@ async function submitLobby(){
     toast('Conectando a la sala…');
     const btn2 = $('btn-back-to-room');
     if(btn2) btn2.style.display = 'flex';
-    setTimeout(()=>{ if(S.phase==='lobby') enterRoom(); }, 1000);
+    setTimeout(()=>{ if(S.phase==='lobby' || S.phase==='room') enterRoom(); }, 1000);
     saveState();
   }
 }
@@ -1012,8 +1057,6 @@ function rejoinRoom(){
 function backToRoom(){
   if(!S.roomCode || !S.me){ toast('No estás en ninguna sala','error'); return; }
 
-  // 🏆 Si soy el creador Y estamos en fase de calificación, sumar los puntos de la ronda
-  // (a menos que ya se hayan sumado antes con "Sumar Puntos")
   if(S.me.isHost && S.phase === 'score'){
     S.players.forEach(p=>{
       let pts = 0;
@@ -1027,7 +1070,6 @@ function backToRoom(){
     toast('🏆 Puntos guardados automáticamente','success');
   }
 
-  // Avisar a todos que se vuelve a la sala (y que sumen sus puntos locales)
   sendMsg({type:'back-to-room', room:S.roomCode, from:S.me.id, name:S.me.name, sumarPuntos: true});
 
   S.phase = 'room';
@@ -1502,10 +1544,15 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     codeInput.addEventListener('input', e=>{ e.target.value = e.target.value.toUpperCase(); });
   }
 
-  // 🎙️ Configurar arrastre de widgets
   activarArrastre($('voice-widget'), $('voice-big'), 'voicePos');
   activarArrastre($('jitsi-widget'), $('jitsi-drag-handle'), 'jitsiPos');
   actualizarBotonesVoz();
+
+  setInterval(() => {
+    if(S.me && S.me.isHost && S.roomCode && S.isRealtime) {
+      broadcast();
+    }
+  }, 5000);
 
   if(loadState()){
     console.log('🔄 Restaurando partida:', S.roomCode);
